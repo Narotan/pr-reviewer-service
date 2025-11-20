@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -51,11 +52,19 @@ func main() {
 	}
 	log.Info().Msg("database connection established")
 
+	// настройка HTTP сервера
 	r := chi.NewRouter()
 
-	// TODO: добавить маршруты и обработчики
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.Logger)
 
-	// TODO: тестовый endpoint для проверки работоспособности
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Info().Msg("hello, world endpoint was called")
+		if _, err := w.Write([]byte("hello,world! db connection is ok.")); err != nil {
+			log.Warn().Err(err).Msg("failed to write response")
+		}
+
+	})
 
 	srv := &http.Server{
 		Addr:    fmt.Sprintf(":%s", cfg.Port),
