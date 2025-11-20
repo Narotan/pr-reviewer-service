@@ -7,6 +7,9 @@ down:
 stop:
 	docker-compose stop
 
+clean:
+	docker-compose down -v
+
 logs:
 	docker-compose logs -f
 
