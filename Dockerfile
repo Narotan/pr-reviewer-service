@@ -1,21 +1,19 @@
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
 
-RUN CGO_ENABLED=0 GOOS=linux go build -o /pr-reviewer-service ./cmd/service/main.go
+COPY . .
+RUN go build -o /bin/server ./cmd/server/
 
 FROM alpine:latest
 
 RUN apk --no-cache add ca-certificates tzdata
 
-WORKDIR /
-
-COPY --from=builder /pr-reviewer-service /pr-reviewer-service
+COPY --from=builder /bin/server /server
 
 EXPOSE 8080
 
-CMD ["/pr-reviewer-service"]
+ENTRYPOINT ["/server"]

@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-  # конфиг бдшки
   db:
     image: postgres:15-alpine
     container_name: pr_reviewer_db
@@ -17,10 +16,9 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
     restart: always
 
-  # мигнации базы данных
   migrator:
     image: migrate/migrate
     container_name: pr_reviewer_migrator
@@ -30,27 +28,22 @@ services:
       - "-path"
       - "/migrations"
       - "-database"
-      - "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
+      - "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable"
       - "up"
     depends_on:
       db:
         condition: service_healthy
+    restart: "no"
 
-  # основное приложение
   app:
     container_name: pr_reviewer_app
     build: .
     ports:
-      - "${APP_PORT}:${APP_PORT}"
+      - "${APP_PORT}:8080"
     environment:
-      DATABASE_URL: "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=disable"
-      PORT: ${APP_PORT}
+      DATABASE_URL: "postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable"
+      PORT: 8080
     depends_on:
-      db:
-        condition: service_healthy
       migrator:
         condition: service_completed_successfully
     restart: unless-stopped
-
-volumes:
-  .docker-data/postgres:
