@@ -1,0 +1,24 @@
+pr-reviewer-service
+*.exe
+
+# локальные файлы Go
+*.log
+*.out
+*.prof
+
+*~
+.cache
+
+.docker-data/
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# goLand / IntelliJ
+.idea/
+
+# файлы с переменными окружения (там могут быть пароли)
+.env
+*.env
+*.env.local
