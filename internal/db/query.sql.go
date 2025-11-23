@@ -16,7 +16,7 @@ const addReviewerToPR = `-- name: AddReviewerToPR :exec
 
 INSERT INTO pr_reviewers (pr_id, user_id)
 VALUES ($1, $2)
-    ON CONFLICT (pr_id, user_id) DO NOTHING
+ON CONFLICT (pr_id, user_id) DO NOTHING
 `
 
 type AddReviewerToPRParams struct {
@@ -24,7 +24,7 @@ type AddReviewerToPRParams struct {
 	UserID uuid.UUID `json:"user_id"`
 }
 
-// --- Reviewers ---
+// --- Ревьюверы ---
 func (q *Queries) AddReviewerToPR(ctx context.Context, arg AddReviewerToPRParams) error {
 	_, err := q.db.Exec(ctx, addReviewerToPR, arg.PrID, arg.UserID)
 	return err
@@ -34,7 +34,7 @@ const createPullRequest = `-- name: CreatePullRequest :one
 
 INSERT INTO pull_requests (title, author_id)
 VALUES ($1, $2)
-    RETURNING id, title, author_id, status, created_at, updated_at
+RETURNING id, title, author_id, status, created_at, updated_at
 `
 
 type CreatePullRequestParams struct {
@@ -42,9 +42,35 @@ type CreatePullRequestParams struct {
 	AuthorID uuid.UUID `json:"author_id"`
 }
 
-// --- Pull Requests ---
+// --- Пулл-реквесты ---
 func (q *Queries) CreatePullRequest(ctx context.Context, arg CreatePullRequestParams) (PullRequest, error) {
 	row := q.db.QueryRow(ctx, createPullRequest, arg.Title, arg.AuthorID)
+	var i PullRequest
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.AuthorID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createPullRequestWithID = `-- name: CreatePullRequestWithID :one
+INSERT INTO pull_requests (id, title, author_id)
+VALUES ($1, $2, $3)
+RETURNING id, title, author_id, status, created_at, updated_at
+`
+
+type CreatePullRequestWithIDParams struct {
+	ID       uuid.UUID `json:"id"`
+	Title    string    `json:"title"`
+	AuthorID uuid.UUID `json:"author_id"`
+}
+
+func (q *Queries) CreatePullRequestWithID(ctx context.Context, arg CreatePullRequestWithIDParams) (PullRequest, error) {
+	row := q.db.QueryRow(ctx, createPullRequestWithID, arg.ID, arg.Title, arg.AuthorID)
 	var i PullRequest
 	err := row.Scan(
 		&i.ID,
@@ -61,10 +87,10 @@ const createTeam = `-- name: CreateTeam :one
 
 INSERT INTO teams (name)
 VALUES ($1)
-    RETURNING id, name
+RETURNING id, name
 `
 
-// --- Teams ---
+// --- Команды ---
 func (q *Queries) CreateTeam(ctx context.Context, name string) (Team, error) {
 	row := q.db.QueryRow(ctx, createTeam, name)
 	var i Team
@@ -76,7 +102,7 @@ const createUser = `-- name: CreateUser :one
 
 INSERT INTO users (name, team_id)
 VALUES ($1, $2)
-    RETURNING id, name, is_active, team_id
+RETURNING id, name, is_active, team_id
 `
 
 type CreateUserParams struct {
@@ -84,7 +110,7 @@ type CreateUserParams struct {
 	TeamID pgtype.UUID `json:"team_id"`
 }
 
-// --- Users ---
+// --- Пользователи ---
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Name, arg.TeamID)
 	var i User
@@ -108,17 +134,81 @@ func (q *Queries) DeactivateUsersByTeam(ctx context.Context, teamID pgtype.UUID)
 	return err
 }
 
+const getAssignmentCountsByPR = `-- name: GetAssignmentCountsByPR :many
+SELECT pr_id, COUNT(*) AS cnt
+FROM pr_reviewers
+GROUP BY pr_id
+`
+
+type GetAssignmentCountsByPRRow struct {
+	PrID uuid.UUID `json:"pr_id"`
+	Cnt  int64     `json:"cnt"`
+}
+
+func (q *Queries) GetAssignmentCountsByPR(ctx context.Context) ([]GetAssignmentCountsByPRRow, error) {
+	rows, err := q.db.Query(ctx, getAssignmentCountsByPR)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssignmentCountsByPRRow
+	for rows.Next() {
+		var i GetAssignmentCountsByPRRow
+		if err := rows.Scan(&i.PrID, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAssignmentCountsByUser = `-- name: GetAssignmentCountsByUser :many
+
+SELECT user_id, COUNT(*) AS cnt
+FROM pr_reviewers
+GROUP BY user_id
+`
+
+type GetAssignmentCountsByUserRow struct {
+	UserID uuid.UUID `json:"user_id"`
+	Cnt    int64     `json:"cnt"`
+}
+
+// --- Статистика назначений ---
+func (q *Queries) GetAssignmentCountsByUser(ctx context.Context) ([]GetAssignmentCountsByUserRow, error) {
+	rows, err := q.db.Query(ctx, getAssignmentCountsByUser)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssignmentCountsByUserRow
+	for rows.Next() {
+		var i GetAssignmentCountsByUserRow
+		if err := rows.Scan(&i.UserID, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCandidatesForInitialReview = `-- name: GetCandidatesForInitialReview :many
 
 SELECT id, name, is_active, team_id FROM users u1
-WHERE
-    team_id = (SELECT team_id FROM users u2 WHERE u2.id = $1)
+WHERE team_id = (SELECT team_id FROM users u2 WHERE u2.id = $1)
   AND u1.is_active = true
   AND u1.id != $1
+ORDER BY random()
 LIMIT 2
 `
 
-// --- основные запросы ---
+// --- Кандидаты на ревью ---
 func (q *Queries) GetCandidatesForInitialReview(ctx context.Context, id uuid.UUID) ([]User, error) {
 	rows, err := q.db.Query(ctx, getCandidatesForInitialReview, id)
 	if err != nil {
@@ -146,22 +236,22 @@ func (q *Queries) GetCandidatesForInitialReview(ctx context.Context, id uuid.UUI
 
 const getCandidatesForReassignment = `-- name: GetCandidatesForReassignment :many
 SELECT id, name, is_active, team_id FROM users u1
-WHERE
-    team_id = (SELECT team_id FROM users u2 WHERE u2.id = $1)
+WHERE team_id = (SELECT team_id FROM users u2 WHERE u2.id = $1)
   AND u1.is_active = true
-  AND u1.id != $2
-    AND u1.id NOT IN (
-        SELECT)
+  AND u1.id != $1
+  AND u1.id NOT IN (
+        SELECT user_id FROM pr_reviewers WHERE pr_id = $2
+  )
 LIMIT 5
 `
 
 type GetCandidatesForReassignmentParams struct {
 	ID   uuid.UUID `json:"id"`
-	ID_2 uuid.UUID `json:"id_2"`
+	PrID uuid.UUID `json:"pr_id"`
 }
 
 func (q *Queries) GetCandidatesForReassignment(ctx context.Context, arg GetCandidatesForReassignmentParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, getCandidatesForReassignment, arg.ID, arg.ID_2)
+	rows, err := q.db.Query(ctx, getCandidatesForReassignment, arg.ID, arg.PrID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,14 +276,12 @@ func (q *Queries) GetCandidatesForReassignment(ctx context.Context, arg GetCandi
 }
 
 const getOpenPullRequestsForReviewer = `-- name: GetOpenPullRequestsForReviewer :many
-
 SELECT pr.id, pr.title, pr.author_id, pr.status, pr.created_at, pr.updated_at
 FROM pull_requests pr
-         JOIN pr_reviewers prr ON pr.id = prr.pr_id
+JOIN pr_reviewers prr ON pr.id = prr.pr_id
 WHERE prr.user_id = $1 AND pr.status = 'OPEN'
 `
 
-// Возвращаем обновленный PR
 func (q *Queries) GetOpenPullRequestsForReviewer(ctx context.Context, userID uuid.UUID) ([]PullRequest, error) {
 	rows, err := q.db.Query(ctx, getOpenPullRequestsForReviewer, userID)
 	if err != nil {
@@ -255,7 +343,7 @@ func (q *Queries) GetReviewerCountForPR(ctx context.Context, prID uuid.UUID) (in
 const getReviewersForPR = `-- name: GetReviewersForPR :many
 SELECT users.id, users.name, users.is_active, users.team_id
 FROM users
-         JOIN pr_reviewers ON users.id = pr_reviewers.user_id
+JOIN pr_reviewers ON users.id = pr_reviewers.user_id
 WHERE pr_reviewers.pr_id = $1
 `
 
@@ -296,6 +384,18 @@ func (q *Queries) GetTeam(ctx context.Context, id uuid.UUID) (Team, error) {
 	return i, err
 }
 
+const getTeamByName = `-- name: GetTeamByName :one
+SELECT id, name FROM teams
+WHERE name = $1
+`
+
+func (q *Queries) GetTeamByName(ctx context.Context, name string) (Team, error) {
+	row := q.db.QueryRow(ctx, getTeamByName, name)
+	var i Team
+	err := row.Scan(&i.ID, &i.Name)
+	return i, err
+}
+
 const getUser = `-- name: GetUser :one
 SELECT id, name, is_active, team_id FROM users
 WHERE id = $1
@@ -311,6 +411,36 @@ func (q *Queries) GetUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.TeamID,
 	)
 	return i, err
+}
+
+const getUsersByTeamID = `-- name: GetUsersByTeamID :many
+SELECT id, name, is_active, team_id FROM users
+WHERE team_id = $1
+`
+
+func (q *Queries) GetUsersByTeamID(ctx context.Context, teamID pgtype.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, getUsersByTeamID, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.IsActive,
+			&i.TeamID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const removeReviewerFromPR = `-- name: RemoveReviewerFromPR :exec
@@ -348,7 +478,7 @@ const updatePullRequestStatus = `-- name: UpdatePullRequestStatus :one
 UPDATE pull_requests
 SET status = $2, updated_at = NOW()
 WHERE id = $1
-    RETURNING id, title, author_id, status, created_at, updated_at
+RETURNING id, title, author_id, status, created_at, updated_at
 `
 
 type UpdatePullRequestStatusParams struct {
@@ -366,6 +496,41 @@ func (q *Queries) UpdatePullRequestStatus(ctx context.Context, arg UpdatePullReq
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const upsertUser = `-- name: UpsertUser :one
+INSERT INTO users (id, name, team_id, is_active)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (id) DO UPDATE
+    SET
+    name = EXCLUDED.name,
+    team_id = EXCLUDED.team_id,
+    is_active = EXCLUDED.is_active
+RETURNING id, name, is_active, team_id
+`
+
+type UpsertUserParams struct {
+	ID       uuid.UUID   `json:"id"`
+	Name     string      `json:"name"`
+	TeamID   pgtype.UUID `json:"team_id"`
+	IsActive bool        `json:"is_active"`
+}
+
+func (q *Queries) UpsertUser(ctx context.Context, arg UpsertUserParams) (User, error) {
+	row := q.db.QueryRow(ctx, upsertUser,
+		arg.ID,
+		arg.Name,
+		arg.TeamID,
+		arg.IsActive,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.IsActive,
+		&i.TeamID,
 	)
 	return i, err
 }

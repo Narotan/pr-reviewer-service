@@ -16,6 +16,9 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/Narotan/pr-reviewer-service/internal/config"
+	"github.com/Narotan/pr-reviewer-service/internal/db"
+	"github.com/Narotan/pr-reviewer-service/internal/handler"
+	"github.com/Narotan/pr-reviewer-service/internal/service"
 )
 
 func main() {
@@ -52,11 +55,32 @@ func main() {
 	}
 	log.Info().Msg("database connection established")
 
+	// инициализация слоев приложения
+	queries := db.New(pool)
+	svc := service.NewService(queries)
+	h := handler.NewHandler(svc, &log.Logger)
+
 	// настройка HTTP сервера
 	r := chi.NewRouter()
 
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Logger)
+
+	// --- Teams ---
+	r.Post("/team/add", h.CreateTeamWithMembers)
+	r.Get("/team/get", h.GetTeam)
+
+	// --- Users  ---
+	r.Post("/users/setIsActive", h.SetUserActiveStatus)
+	r.Get("/users/getReview", h.GetPRsForUser)
+
+	// --- Pull Requests ---
+	r.Post("/pullRequest/create", h.CreatePullRequest)
+	r.Post("/pullRequest/merge", h.MergePullRequest)
+	r.Post("/pullRequest/reassign", h.ReassignReviewer)
+
+	// --- Stats ---
+	r.Get("/stats/assignments", h.GetAssignmentStats)
 
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("hello, world endpoint was called")

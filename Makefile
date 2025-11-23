@@ -1,17 +1,19 @@
+COMPOSE := $(shell command -v docker-compose 2>/dev/null || echo 'docker compose')
+
 up:
-	docker-compose up --build
+	$(COMPOSE) up --build
 
 down:
-	docker-compose down
+	$(COMPOSE) down
 
 stop:
-	docker-compose stop
+	$(COMPOSE) stop
 
 clean:
-	docker-compose down -v
+	$(COMPOSE) down -v
 
 logs:
-	docker-compose logs -f
+	$(COMPOSE) logs -f
 
 sqlc:
 	sqlc generate
