@@ -116,3 +116,15 @@ WHERE team_id = (SELECT team_id FROM users u2 WHERE u2.id = $1)
         SELECT user_id FROM pr_reviewers WHERE pr_id = $2
   )
 LIMIT 5;
+
+-- --- Статистика назначений ---
+
+-- name: GetAssignmentCountsByUser :many
+SELECT user_id, COUNT(*) AS cnt
+FROM pr_reviewers
+GROUP BY user_id;
+
+-- name: GetAssignmentCountsByPR :many
+SELECT pr_id, COUNT(*) AS cnt
+FROM pr_reviewers
+GROUP BY pr_id;

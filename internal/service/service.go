@@ -31,7 +31,11 @@ type Store interface {
 	GetCandidatesForReassignment(ctx context.Context, arg db.GetCandidatesForReassignmentParams) ([]db.User, error)
 	// выполняет fn в транзакции; fn получает объект запросов, привязанный к tx
 	ExecTx(ctx context.Context, fn func(q *db.Queries) error) error
+	// статистика назначений (sqlc сгенерирует методы GetAssignmentCountsByUser/GetAssignmentCountsByPR)
+	GetAssignmentCountsByUser(ctx context.Context) ([]db.GetAssignmentCountsByUserRow, error)
+	GetAssignmentCountsByPR(ctx context.Context) ([]db.GetAssignmentCountsByPRRow, error)
 }
+
 type UserDetails struct {
 	User     db.User
 	TeamName string
@@ -57,6 +61,11 @@ type PRDetails struct {
 	CreatedAt         *string  `json:"createdAt,omitempty"`
 	MergedAt          *string  `json:"mergedAt,omitempty"`
 	ReplacedBy        string   `json:"-"` // не входит в json ответ, используется для переназначения
+}
+
+type AssignmentStats struct {
+	Users []db.GetAssignmentCountsByUserRow `json:"users"`
+	PRs   []db.GetAssignmentCountsByPRRow   `json:"prs"`
 }
 
 type Service struct {
@@ -391,4 +400,23 @@ func (s *Service) ReassignReviewer(ctx context.Context, prIDStr string, oldRevie
 	}
 
 	return details, nil
+}
+
+func (s *Service) GetAssignmentStats(ctx context.Context) (*AssignmentStats, error) {
+	users, err := s.store.GetAssignmentCountsByUser(ctx)
+	if err != nil {
+		return nil, err
+	}
+	prs, err := s.store.GetAssignmentCountsByPR(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Ensure we return empty slices instead of null in JSON
+	if users == nil {
+		users = make([]db.GetAssignmentCountsByUserRow, 0)
+	}
+	if prs == nil {
+		prs = make([]db.GetAssignmentCountsByPRRow, 0)
+	}
+	return &AssignmentStats{Users: users, PRs: prs}, nil
 }

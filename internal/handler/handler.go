@@ -21,6 +21,8 @@ type Service interface {
 	UpdatePRStatusToMerged(ctx context.Context, prID string) (*service.PRDetails, error)
 	GetOpenPRsForReviewer(ctx context.Context, userID uuid.UUID) ([]service.PRShort, error)
 	ReassignReviewer(ctx context.Context, prID string, oldReviewerID string) (*service.PRDetails, error)
+	// статистика
+	GetAssignmentStats(ctx context.Context) (*service.AssignmentStats, error)
 }
 
 type Handler struct {
@@ -304,4 +306,15 @@ func (h *Handler) ReassignReviewer(w http.ResponseWriter, r *http.Request) {
 		"pr":          prDetails,
 		"replaced_by": prDetails.ReplacedBy,
 	})
+}
+
+// GetAssignmentStats возвращает статистику назначений (по пользователям и по PR)
+func (h *Handler) GetAssignmentStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.service.GetAssignmentStats(r.Context())
+	if err != nil {
+		h.log.Error().Err(err).Msg("failed to get assignment stats")
+		respondWithError(w, h.log, http.StatusInternalServerError, "INTERNAL", "internal server error")
+		return
+	}
+	respondWithJSON(w, h.log, http.StatusOK, map[string]interface{}{"stats": stats})
 }

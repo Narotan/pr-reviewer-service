@@ -134,6 +134,70 @@ func (q *Queries) DeactivateUsersByTeam(ctx context.Context, teamID pgtype.UUID)
 	return err
 }
 
+const getAssignmentCountsByPR = `-- name: GetAssignmentCountsByPR :many
+SELECT pr_id, COUNT(*) AS cnt
+FROM pr_reviewers
+GROUP BY pr_id
+`
+
+type GetAssignmentCountsByPRRow struct {
+	PrID uuid.UUID `json:"pr_id"`
+	Cnt  int64     `json:"cnt"`
+}
+
+func (q *Queries) GetAssignmentCountsByPR(ctx context.Context) ([]GetAssignmentCountsByPRRow, error) {
+	rows, err := q.db.Query(ctx, getAssignmentCountsByPR)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssignmentCountsByPRRow
+	for rows.Next() {
+		var i GetAssignmentCountsByPRRow
+		if err := rows.Scan(&i.PrID, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getAssignmentCountsByUser = `-- name: GetAssignmentCountsByUser :many
+
+SELECT user_id, COUNT(*) AS cnt
+FROM pr_reviewers
+GROUP BY user_id
+`
+
+type GetAssignmentCountsByUserRow struct {
+	UserID uuid.UUID `json:"user_id"`
+	Cnt    int64     `json:"cnt"`
+}
+
+// --- Статистика назначений ---
+func (q *Queries) GetAssignmentCountsByUser(ctx context.Context) ([]GetAssignmentCountsByUserRow, error) {
+	rows, err := q.db.Query(ctx, getAssignmentCountsByUser)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetAssignmentCountsByUserRow
+	for rows.Next() {
+		var i GetAssignmentCountsByUserRow
+		if err := rows.Scan(&i.UserID, &i.Cnt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCandidatesForInitialReview = `-- name: GetCandidatesForInitialReview :many
 
 SELECT id, name, is_active, team_id FROM users u1

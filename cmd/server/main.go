@@ -79,6 +79,9 @@ func main() {
 	r.Post("/pullRequest/merge", h.MergePullRequest)
 	r.Post("/pullRequest/reassign", h.ReassignReviewer)
 
+	// --- Stats ---
+	r.Get("/stats/assignments", h.GetAssignmentStats)
+
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		log.Info().Msg("hello, world endpoint was called")
 		if _, err := w.Write([]byte("hello,world! db connection is ok.")); err != nil {

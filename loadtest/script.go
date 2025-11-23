@@ -146,7 +146,6 @@ func doRequest(method, path string, payload interface{}) {
 		isSuccess = true
 	}
 
-	// Читаем тело, чтобы переиспользовать соединение
 	if resp != nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		resp.Body.Close()
@@ -162,9 +161,9 @@ func generateTestData() []TeamRequest {
 		var members []TeamMember
 		for j := 1; j <= membersPerTeam; j++ {
 
-			// Мы объединяем i и j, чтобы получить уникальный номер (например, i=20, j=10 -> 2010)
+			// объединяем i и j, чтобы получить уникальный номер (например, i=20, j=10 -> 2010)
 			combinedID := (i * 100) + j
-			// Мы форматируем этот номер в 12-значную строку с ведущими нулями
+			// форматируем этот номер в 12-значную строку с ведущими нулями
 			idSuffix := fmt.Sprintf("%012d", combinedID)
 
 			// формат 8-4-4-4-12 (всего 36 символов)
@@ -208,7 +207,7 @@ func recordMetrics(success bool, duration time.Duration) {
 	latencies = append(latencies, duration)
 }
 
-// расчет 95-го перцентиля
+// расчет успешности операций
 func calculateP95(latencies []time.Duration) time.Duration {
 	if len(latencies) == 0 {
 		return 0
