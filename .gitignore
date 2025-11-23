@@ -17,8 +17,3 @@ pr-reviewer-service
 
 # goLand / IntelliJ
 .idea/
-
-# файлы с переменными окружения (там могут быть пароли)
-.env
-*.env
-*.env.local
